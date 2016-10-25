@@ -1,0 +1,12 @@
+[package]
+name = "api-rs"
+version = "0.1.0"
+authors = ["James Tease <james@jamestease.co.uk>"]
+
+[dependencies]
+nickel = "0.8"
+rustc-serialize = "0.3"
+r2d2 = "0.7"
+r2d2_postgres = "0.10"
+nickel_postgres = "0.2"
+uuid = { version = "0.2", features = ["v4"] }

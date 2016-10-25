@@ -66,15 +66,33 @@ fn main() {
 
     query.execute(&[&uuid, &user.username, &user.email, &user.password]).expect("Failed to save");
 
-    format!("Hello from POST /users/new")
+    format!("Created user {}", uuid)
   });
 
   router.delete("/users/:id", middleware! { |request, response|
-    format!("Hello from DELETE /users/:id")
+    let id = request.param("id").unwrap();
+    let db = request.pg_conn().expect("Failed to get connection from pool");
+    println!("{:?}", id);
+
+    let query = db.prepare_cached("DELETE FROM users WHERE id = $1").unwrap();
+    query.execute(&[&id]).expect("Failed to delete user");
+
+    format!("Deleted user {}", id)
   });
 
   router.put("/users/:id", middleware! { |request, response|
-    format!("Hello from PUT /users/:id")
+    let id = request.param("id").unwrap().to_string();
+
+    // can't borrow request as immutable since id has borrowed already
+    // so create new scope
+    {
+      let user = request.json_as::<User>().unwrap();
+
+      let db = request.pg_conn().expect("Failed to get connection from pool");
+      let query = db.prepare_cached("UPDATE users SET username = $1, email = $2, password = $3 WHERE id = $4").unwrap();
+      query.execute(&[&user.username, &user.email, &user.password, &id]).expect("Failed to update user");
+    }
+    format!("Updated user {}", id)
   });
 
   server.utilize(router);

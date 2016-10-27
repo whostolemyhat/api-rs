@@ -4,7 +4,7 @@ After having a play with [Iron to build a basic JSON response server](https://ja
 
 ## Setup
 
-We'll use Postgres as the database, so make sure you have that available, then add the dependencies to `Cargo.toml`:
+Create a new binary project with `cargo new api --bin`. We'll use Postgres as the database, so make sure you have that available (we'll cover creating the table in a bit), then add the dependencies to `Cargo.toml`:
 
 ```# Cargo.toml
 [package]
@@ -19,9 +19,43 @@ rustc-serialize = "0.3"
 r2d2 = "0.7"
 r2d2_postgres = "0.10"
 ```
+
 `nickel_postgres` is a middleware library which helps connect Nickel and Postgres; `r2d2` is a database connection pool manager, since we don't want to open a new connection with every request (with a lot of traffic, opening a new connection with each request means you'd quickly get to the point where new requests wouldn't be able to connect).
 
-<!-- Make sure you are using version `0.8` of Nickel - as of October 2016, `nickel_postgres` doesn't yet work with the latest version (`0.9`) of Nickel, and you'll get lots of middleware trait errors. -->
+Let's run!
+
+```
+cargo run
+
+error[E0277]: the trait bound `for<'r, 'mw, 'conn> nickel_postgres::PostgresMiddleware: std::ops::Fn<(&'r mut nickel
+::Request<'mw, 'conn>, nickel::Response<'mw>)>` is not satisfied
+  --> src\main.rs:35:10
+   |
+35 |   server.utilize(PostgresMiddleware::with_pool(db_pool));
+   |          ^^^^^^^
+   |
+   = note: required because of the requirements on the impl of `nickel::Middleware<()>` for `nickel_postgres::Postgr
+esMiddleware`
+... [more errors]
+```
+
+Well, that didn't work.
+
+After a bit of digging, it turns out this error is because `nickel_postgres` requires version `0.8.1`, which is incompatible with the version we're using in our main app, `0.9`. I've submitted a pull request to fix this, but until it gets merged we can use the version from my Github account in Cargo.toml:
+
+```# Cargo.toml
+nickel_postgres = { git = "https://github.com/whostolemyhat/nickel-postgres", rev = "8fa89b4"}
+```
+
+And run:
+
+```
+cargo run
+...
+Hello World!
+```
+
+Hooray!
 
 ## notes
 http://hermanradtke.com/2016/05/23/connecting-webservice-database-rust.html

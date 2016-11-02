@@ -7,7 +7,10 @@ authors = ["James Tease <james@jamestease.co.uk>"]
 nickel = "0.9"
 rustc-serialize = "0.3"
 r2d2 = "0.7"
-r2d2_postgres = "0.10"
-nickel_postgres = { git = "https://github.com/whostolemyhat/nickel-postgres", rev = "8fa89b4"}
+r2d2_postgres = "0.11"
+nickel_postgres = { git = "https://github.com/whostolemyhat/nickel-postgres", rev = "7cb8c0b"}
 uuid = { version = "0.3", features = ["v4", "rustc-serialize"] }
-postgres = { version = "0.12", features = ["with-uuid"] }
+
+[dependencies.postgres]
+version = "0.12"
+features = ["with-uuid"]

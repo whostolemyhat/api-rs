@@ -57,6 +57,129 @@ Hello World!
 
 Hooray!
 
+## Hello world
+
+basic example
+
+```
+#[macro_use]
+extern crate nickel;
+
+use nickel::{ Nickel, HttpRouter };
+
+fn main() {
+  let mut server = Nickel::new();
+  let mut router = Nickel::router();
+
+  router.get("/", middleware! { |request, response|
+    format!("Hello!")
+  });
+
+  server.utilize(router);
+  server.listen("localhost:3004").unwrap();
+}
+```
+
+![](hello-world.png)
+
+## Database
+
+The next stage is to connect to the database. Create a database and user which will be able to access tables within that database, then create a table
+called `users`:
+
+```
+CREATE TABLE users (
+  id text primary key NOT NULL,
+  username text NOT NULL,
+  email text NOT NULL,
+  password text NOT NULL,
+  date_added timestamp default now()
+);
+```
+
+With the table created, we can start connecting in our app.
+
+```// main.rs
+#[macro_use]
+extern crate nickel;
+extern crate r2d2;
+extern crate r2d2_postgres;
+extern crate nickel_postgres;
+
+use nickel::{ Nickel, HttpRouter };
+use r2d2::{ Config, Pool };
+use r2d2_postgres::{ PostgresConnectionManager, SslMode };
+use nickel_postgres::{ PostgresMiddleware };
+
+fn main() {
+  // add database connection
+  let db_url = "postgresql://username:password@localhost:5432/databasename";
+  let db = PostgresConnectionManager::new(db_url, SslMode::None)
+    .expect("Unable to connect to database");
+  let db_pool = Pool::new(Config::default(), db)
+    .expect("Unable to initialise database pool");
+
+  let mut server = Nickel::new();
+  let mut router = Nickel::router();
+
+  router.get("/", middleware! { |request, response|
+    format!("Hello!")
+  });
+
+  // now use the database in the server
+  server.utilize(PostgresMiddleware::with_pool(db_pool));
+  server.utilize(router);
+  server.listen("localhost:3004").unwrap();
+}
+
+```
+
+The key things to note here:
+
+1. Add the `r2d2` and `nickel_postgres` crates; `r2d2` is a database connection pool manager, so we don't need to create a new connection with every request, and `nickel_postgres` is middleware which allows us to access the database connection from the request object.
+
+2. The database url is similar to a web address; replace the different sections with your database details. You need to have the username and password of the user allowed to make changes to your database (`username:password`, the url and port of the database (`locahost:5432` - `5432` is the default port Postgres listens on), and the name of the database `/databasename`.
+
+3. We then create a connection to the database using `PostgresConnectionManager`, and set up a pool using the database connection.
+
+4. The final step is to use the pool in the server: `server.utilize(PostgresMiddleware::with_pool(db_pool));`
+
+![](database.png)
+
+## Post route
+
+The first route we'll add will be the Post route, which will allow us to create records in the database. This will accept JSON data, deserialise into a struct, then use that data to insert into the database.
+
+First, create a struct to hold user data:
+
+```// main.rs
+#[derive(RustcEncodable, RustcDecodable, Debug)]
+struct User {
+  id: String,
+  username: String,
+  email: String,
+  password: String
+}
+```
+
+
+
+```
+router.post("/users/new", middleware! { |request, response|
+  let user = request.json_as::<User>().unwrap();
+  println!("{:?}", user);
+
+  let uuid = Uuid::new_v4().to_string();
+  let db = request.pg_conn().expect("Failed to get connection from pool");
+  let query = db.prepare_cached("INSERT INTO users (id, username, email, password) VALUES ($1, $2, $3, $4)").unwrap();
+
+  query.execute(&[&uuid, &user.username, &user.email, &user.password]).expect("Failed to save");
+
+  format!("Created user {}", uuid)
+});
+```
+
+
 ## notes
 http://hermanradtke.com/2016/05/23/connecting-webservice-database-rust.html
 

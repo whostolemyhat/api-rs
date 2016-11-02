@@ -32,7 +32,6 @@ fn main() {
     .expect("Unable to initialise database pool");
 
   let mut server = Nickel::new();
-  server.utilize(PostgresMiddleware::with_pool(db_pool));
   let mut router = Nickel::router();
 
   router.get("/users", middleware! { |request, mut response|
@@ -63,6 +62,7 @@ fn main() {
     let uuid = Uuid::new_v4().to_string();
     let db = request.pg_conn().expect("Failed to get connection from pool");
     let query = db.prepare_cached("INSERT INTO users (id, username, email, password) VALUES ($1, $2, $3, $4)").unwrap();
+println!("{:?}", &uuid);
 
     query.execute(&[&uuid, &user.username, &user.email, &user.password]).expect("Failed to save");
 
@@ -95,6 +95,7 @@ fn main() {
     format!("Updated user {}", id)
   });
 
+  server.utilize(PostgresMiddleware::with_pool(db_pool));
   server.utilize(router);
-  server.listen("localhost:3004");
+  server.listen("localhost:3004").unwrap();
 }

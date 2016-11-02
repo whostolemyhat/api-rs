@@ -15,7 +15,7 @@ use rustc_serialize::json;
 
 #[derive(RustcEncodable, RustcDecodable, Debug)]
 struct User {
-  id: Option<String>,
+  id: Uuid,
   username: String,
   email: String,
   password: String

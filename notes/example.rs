@@ -30,13 +30,28 @@ fn main() {
   let mut server = Nickel::new();
   let mut router = Nickel::router();
 
-  router.get("/", middleware! { |request, response|
-    format!("Hello!")
+  router.get("/", middleware! { |request, mut response|
+    let query = "SELECT * FROM users";
+    let mut users = Vec::new();
+    let db = request.pg_conn().expect("Failed to get connection from pool");
+
+    for row in &db.query(query, &[]).expect("Failed to connect to db") {
+      let user = User {
+        id: row.get(0),
+        username: row.get(1),
+        email: row.get(2),
+        password: row.get(3)
+      };
+
+      users.push(user);
+    }
+
+    response.set(MediaType::Json);
+    json::encode(&users).expect("Failed to serialise users")
   });
 
   router.post("/new", middleware! { |request, response|
     let user = request.json_as::<User>().unwrap();
-    println!("{:?}", user);
 
     let uuid = Uuid::new_v4();
     let db = request.pg_conn().expect("Failed to get connection from pool");

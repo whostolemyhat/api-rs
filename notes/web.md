@@ -311,6 +311,32 @@ fn main() {
 
 ## Get
 
+Let's add a route to read the users, so we have a simple way of checking what's going on in the database. In the `router.get` function, we'll query the database similar to the `post` function, except just select rows. Once we have the data, we'll transform that into `User` structs then serialise into JSON for display.
+
+```
+router.get("/", middleware! { |request, mut response|
+  let query = "SELECT * FROM users";
+  let mut users = Vec::new();
+  let db = request.pg_conn().expect("Failed to get connection from pool");
+
+  for row in &db.query(query, &[]).expect("Failed to connect to db") {
+    let user = User {
+      id: row.get(0),
+      username: row.get(1),
+      email: row.get(2),
+      password: row.get(3)
+    };
+
+    users.push(user);
+  }
+
+  response.set(MediaType::Json);
+  json::encode(&users).expect("Failed to serialise users")
+});
+```
+
+Note that we have to mark `response` as mutable in the middleware function, since we need to set the response type to JSON.
+
 ## notes
 http://hermanradtke.com/2016/05/23/connecting-webservice-database-rust.html
 

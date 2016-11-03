@@ -5,6 +5,7 @@ extern crate r2d2_postgres;
 extern crate nickel_postgres;
 extern crate rustc_serialize;
 extern crate uuid;
+extern crate bcrypt;
 
 use uuid::Uuid;
 use nickel::{ Nickel, HttpRouter, MediaType, JsonBody };
@@ -12,6 +13,7 @@ use r2d2::{ Config, Pool };
 use r2d2_postgres::{ PostgresConnectionManager, TlsMode };
 use nickel_postgres::{ PostgresMiddleware, PostgresRequestExtensions };
 use rustc_serialize::json;
+use bcrypt::{ DEFAULT_COST, hash };
 
 #[derive(RustcEncodable, RustcDecodable, Debug)]
 struct User {
@@ -62,8 +64,9 @@ fn main() {
     let db = request.pg_conn().expect("Failed to get connection from pool");
     let query = db.prepare_cached("INSERT INTO users (id, username, email, password) VALUES ($1, $2, $3, $4)").unwrap();
 
-    query.execute(&[&uuid, &user.username, &user.email, &user.password]).expect("Failed to save");
+    let hashed = hash(&(user.password)[..], DEFAULT_COST).unwrap();
 
+    query.execute(&[&uuid, &user.username, &user.email, &hashed]).expect("Failed to save");
     format!("Created user {}", uuid)
   });
 

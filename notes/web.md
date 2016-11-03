@@ -229,6 +229,53 @@ Let's test it!
 
 ![](post.png)
 
+And let's check it was actually stored in the database:
+
+![](entry-in-db.png)
+
+However, the passwords are being stored as plain text, which is a terrible idea: [passwords should never, ever, ever be stored as plain text!](http://security.blogoverflow.com/2011/11/why-passwords-should-be-hashed/) They should always be hashed using a secure algorithm, then the hash should be saved, so you never save the plain password.
+
+We'll use `bcrypt` to hash the passwords before they're stored; `bcrypt` [requires a C compiler to be present on your path](https://github.com/alexcrichton/gcc-rs#compile-time-requirements), so make sure you have one available (that link should give everything you need).
+
+Once you've got a C compiler ready, add `bcrypt` to Cargo.toml:
+
+``` # Cargo.toml
+bcrypt = "0.1"
+```
+
+and update the `post` function to hash the password before saving:
+
+```
+extern crate bcrypt;
+use bcrypt::{ DEFAULT_COST, hash };
+...
+
+fn main() {
+...
+  router.post("/new", middleware! { |request, response|
+    let user = request.json_as::<User>().unwrap();
+
+    let uuid = Uuid::new_v4();
+    let db = request.pg_conn().expect("Failed to get connection from pool");
+    let query = db.prepare_cached("INSERT INTO users (id, username, email, password) VALUES ($1, $2, $3, $4)").unwrap();
+
+    // hash the password
+    let hashed = hash(&(user.password)[..], DEFAULT_COST).unwrap();
+
+    // save the hashed string, not the raw password
+    query.execute(&[&uuid, &user.username, &user.email, &hashed]).expect("Failed to save");
+    format!("Created user {}", uuid)
+  });
+...
+}
+```
+
+You'll notice when you save a new user that it's slower than before - this is part of `bcrypt`'s functionality, to stop computers from trying thousands of passwords a second. `bcrypt` also salts the password, which means that running the hash function on the same string won't give the same result every time (although `bcrypt` does know how to separate the salt for verification, which we'll cover in a bit).
+
+Running the code, and then posting the same data again shows that hashing is working:
+
+![](hashed-entry.png)
+
 
 Full code:
 ```
@@ -244,6 +291,7 @@ r2d2 = "0.7"
 r2d2_postgres = "0.11"
 nickel_postgres = { git = "https://github.com/whostolemyhat/nickel-postgres", rev = "7cb8c0b"}
 uuid = { version = "0.3", features = ["v4", "rustc-serialize"] }
+bcrypt = "0.1"
 
 [dependencies.postgres]
 version = "0.12"
@@ -258,6 +306,7 @@ extern crate r2d2_postgres;
 extern crate nickel_postgres;
 extern crate rustc_serialize;
 extern crate uuid;
+extern crate bcrypt;
 
 use uuid::Uuid;
 use nickel::{ Nickel, HttpRouter, MediaType, JsonBody };
@@ -265,6 +314,7 @@ use r2d2::{ Config, Pool };
 use r2d2_postgres::{ PostgresConnectionManager, TlsMode };
 use nickel_postgres::{ PostgresMiddleware, PostgresRequestExtensions };
 use rustc_serialize::json;
+use bcrypt::{ DEFAULT_COST, hash };
 
 #[derive(RustcEncodable, RustcDecodable, Debug)]
 struct User {
@@ -297,8 +347,9 @@ fn main() {
     let db = request.pg_conn().expect("Failed to get connection from pool");
     let query = db.prepare_cached("INSERT INTO users (id, username, email, password) VALUES ($1, $2, $3, $4)").unwrap();
 
-    query.execute(&[&uuid, &user.username, &user.email, &user.password]).expect("Failed to save");
+    let hashed = hash(&(user.password)[..], DEFAULT_COST).unwrap();
 
+    query.execute(&[&uuid, &user.username, &user.email, &hashed]).expect("Failed to save");
     format!("Created user {}", uuid)
   });
 

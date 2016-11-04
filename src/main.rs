@@ -36,7 +36,7 @@ fn main() {
   let mut server = Nickel::new();
   let mut router = Nickel::router();
 
-  router.get("/users", middleware! { |request, mut response|
+  router.get("/", middleware! { |request, mut response|
     let query = "SELECT * FROM users";
     let mut users = Vec::new();
     let db = request.pg_conn().expect("Failed to get connection from pool");
@@ -56,9 +56,37 @@ fn main() {
     json::encode(&users).expect("Failed to serialise users")
   });
 
+  router.get("/:id", middleware! { |request, mut response|
+    // TODO: return 500 if error
+    let id = match request.param("id") {
+      Some(result) => match Uuid::parse_str(result) {
+        Ok(result) => result,
+        Err(e) => panic!("Error parsing id {}", e)
+      },
+      None => panic!("Provide an id!")
+    };
+
+    let mut users = Vec::new();
+    let db = request.pg_conn().expect("Failed to get connection from pool");
+    let query = db.prepare_cached("SELECT * FROM users WHERE id = $1").unwrap();
+
+    for row in &query.query(&[&id]).expect("Failed to find user") {
+      let user = User {
+        id: row.get(0),
+        username: row.get(1),
+        email: row.get(2),
+        password: row.get(3)
+      };
+      users.push(user)
+    }
+
+    response.set(MediaType::Json);
+    json::encode(&users).expect("Failed to serialise user")
+  });
+
   // only accepts JSON post data
-  router.post("/users/new", middleware! { |request, response|
-    let user = request.json_as::<User>().unwrap();
+  router.post("/new", middleware! { |request, response|
+    let user = request.json_as::<User>().expect("Badly-formed user json");
 
     let uuid = Uuid::new_v4();
     let db = request.pg_conn().expect("Failed to get connection from pool");
@@ -70,29 +98,41 @@ fn main() {
     format!("Created user {}", uuid)
   });
 
-  router.delete("/users/:id", middleware! { |request, response|
-    let id = request.param("id").unwrap();
+  router.delete("/:id", middleware! { |request, response|
+    // let id = request.param("id").unwrap();
+    let id = match request.param("id") {
+      Some(result) => match Uuid::parse_str(result) {
+        Ok(result) => result,
+        Err(e) => panic!("Error parsing id {}", e)
+      },
+      None => panic!("Provide an id!")
+    };
+
     let db = request.pg_conn().expect("Failed to get connection from pool");
-    println!("{:?}", id);
 
     let query = db.prepare_cached("DELETE FROM users WHERE id = $1").unwrap();
     query.execute(&[&id]).expect("Failed to delete user");
+    println!("{:?}", id);
 
     format!("Deleted user {}", id)
   });
 
-  router.put("/users/:id", middleware! { |request, response|
-    let id = request.param("id").unwrap().to_string();
+  router.put("/:id", middleware! { |request, response|
+    let id = match request.param("id") {
+      Some(result) => match Uuid::parse_str(result) {
+        Ok(result) => result,
+        Err(e) => panic!("Error parsing id {}", e)
+      },
+      None => panic!("Provide an id!")
+    };
 
-    // can't borrow request as immutable since id has borrowed already
-    // so create new scope
-    {
-      let user = request.json_as::<User>().unwrap();
+    let user = request.json_as::<User>().unwrap();
+    let hashed = hash(&(user.password)[..], DEFAULT_COST).unwrap();
 
-      let db = request.pg_conn().expect("Failed to get connection from pool");
-      let query = db.prepare_cached("UPDATE users SET username = $1, email = $2, password = $3 WHERE id = $4").unwrap();
-      query.execute(&[&user.username, &user.email, &user.password, &id]).expect("Failed to update user");
-    }
+    let db = request.pg_conn().expect("Failed to get connection from pool");
+    let query = db.prepare_cached("UPDATE users SET username = $1, email = $2, password = $3 WHERE id = $4").unwrap();
+    query.execute(&[&user.username, &user.email, &hashed, &id]).expect("Failed to update user");
+
     format!("Updated user {}", id)
   });
 

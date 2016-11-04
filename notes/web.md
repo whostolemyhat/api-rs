@@ -386,7 +386,40 @@ router.get("/", middleware! { |request, mut response|
 });
 ```
 
-Note that we have to mark `response` as mutable in the middleware function, since we need to set the response type to JSON.
+Note that we have to mark `response` as mutable in the middleware function, since we need to set the response type to JSON. Run the project and visit the site:
+
+![](get-users.png)
+
+## Update and Delete
+
+The next routes to add, update and delete, are straightforward - they're very similar to the Post route, except they also read an id from the request object for the query. Starting with delete:
+
+``` // main.rs
+
+fn main() {
+...
+
+  router.delete("/:id", middleware! { |request, response|
+    let id = request.param("id").unwrap();
+    let db = request.pg_conn().expect("Failed to get connection from pool");
+
+    let query = db.prepare_cached("DELETE FROM users WHERE id = $1").unwrap();
+    query.execute(&[&id]).expect("Failed to delete user");
+
+    format!("Deleted user {}", id)
+  });
+
+...
+}
+```
+
+This is very similar to the post route, except uses `router.delete` and has a placeholder token in the route - `/:id`. This tells Nickel to take anything after the slash in the URL and assign it to a parameter in the request body, which we can then read:
+
+```let id = request.param("id").unwrap();```
+
+## login, jwt
+## frontend
+
 
 ## notes
 http://hermanradtke.com/2016/05/23/connecting-webservice-database-rust.html

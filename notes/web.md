@@ -417,6 +417,10 @@ This is very similar to the post route, except uses `router.delete` and has a pl
 
 ```let id = request.param("id").unwrap();```
 
+We can then use that id to pass into the query, which will delete a row from the database.
+
+Update is similar
+
 ## login, jwt
 ## frontend
 

@@ -6,6 +6,7 @@ extern crate nickel_postgres;
 extern crate rustc_serialize;
 extern crate uuid;
 extern crate bcrypt;
+extern crate jsonwebtoken as jwt;
 
 use uuid::Uuid;
 use nickel::{ Nickel, HttpRouter, MediaType, JsonBody };
@@ -13,13 +14,14 @@ use r2d2::{ Config, Pool };
 use r2d2_postgres::{ PostgresConnectionManager, TlsMode };
 use nickel_postgres::{ PostgresMiddleware, PostgresRequestExtensions };
 use rustc_serialize::json;
-use bcrypt::{ DEFAULT_COST, hash };
+use bcrypt::{ DEFAULT_COST, hash, verify };
+use jwt::{ encode, decode, Header, Algorithm };
 
 #[derive(RustcEncodable, RustcDecodable, Debug)]
 struct User {
   id: Option<Uuid>,
   username: String,
-  email: String,
+  email: Option<String>,
   password: String
 }
 
@@ -134,6 +136,26 @@ fn main() {
     query.execute(&[&user.username, &user.email, &hashed, &id]).expect("Failed to update user");
 
     format!("Updated user {}", id)
+  });
+
+  router.post("/login", middleware! { |request, response|
+    let user = request.json_as::<User>().expect("Badly-formed user json");
+
+    // find user in db by username
+    let mut password = String::new();
+
+    let db = request.pg_conn().expect("Failed to get connection from pool");
+    let query = db.prepare_cached("SELECT password FROM users WHERE username = $1").unwrap();
+    for row in &query.query(&[&user.username]).expect("Failed to find user") {
+      password = row.get(0)
+    }
+
+    // compare passwords - unwrap for verify
+    let value = verify(&user.password, &password[..]).unwrap();
+
+    format!("{}", value)
+    // y = jwt
+    // n = incorrect
   });
 
   server.utilize(PostgresMiddleware::with_pool(db_pool));
